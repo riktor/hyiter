@@ -1,5 +1,5 @@
-(import (clish (*)))
-(require (clish (*)))
+(import (hycl.core (*)))
+(require (hycl.core (*)))
 (require [hy.contrib.loop [loop]])
 
 
