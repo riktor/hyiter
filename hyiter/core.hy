@@ -154,7 +154,7 @@
                                                   ~(get el 1))
                              (get flag 0) True)
                        (if (consp el)
-                           (recur el acc))))e))
+                           (recur el acc))))))
        (cons body acc)))
 
 (defun replace-append (flag ret-sym body)
@@ -303,7 +303,7 @@
            (break)))
        `(try
           (progn
-            (setf ~g!tag ~(if (and (keyword? (car clauses)) (= "\ufdd0:" (subseq (car clauses) 0 2)))
+            (setf ~g!tag ~(if (keyword? (car clauses))
                               (car clauses)
                               nil))
             (setf ~g!ret ~init-var)
