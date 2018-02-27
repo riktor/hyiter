@@ -1,7 +1,5 @@
 (import
-  (hycl.core (*))
-  (pandas :as pd)
-  (collections (defaultdict)))
+  (hycl.core (*)))
 
 (require
   (hycl.core (*))
@@ -114,6 +112,14 @@
         (push `(~__counter__ 0) (get parsed :with))
         (push `(~__counter__ (+ ~__counter__ 1)) (get parsed :for))
         (push `(not (< ~__counter__ ~(get clause 1))) (get parsed :break))))
+    
+    ((matchp clause '(drop _))
+      (let ((__counter__ (gensym "counter")))
+        (push `(~__counter__ 0) (get parsed :with))
+        (push `(~__counter__ (+ ~__counter__ 1)) (get parsed :for))
+        (push `(< ~__counter__ ~(get clause 1)) (get parsed :drop))))
+    ((matchp clause '(dropwhile _))
+      (push (get clause 1) (get parsed :drop)))
 
     ((matchp clause '(while _))
       (push `(not ~(get clause 1)) (get parsed :break)))
@@ -132,7 +138,7 @@
                          :body nil
                          :finally nil
                          :break nil
-                         }))
+                         :drop nil}))
     (for (el clauses)
       (parse-clause el parsed-clauses ret-sym))
     (nreverse (get parsed-clauses :for))
@@ -158,42 +164,6 @@
                                                     (.extend acc [(get el 3)])
                                                     (get el 3)))
                                                ~(get el 1))
-                          (get flag 0) True)
-                    (if (consp el)
-                        (recur el acc))))))
-    (cons body acc)))
-
-;; (.append ~(cond/cl
-;;                                                   ((matchp el '(collect-series _)) ret-sym)
-;;                                                   ((matchp el '(collect-series _ into _))
-;;                                                     (.extend acc [(get el 3)])
-;;                                                     (get el 3)))
-;;                                                ~(get el 1))
-
-(defn group (src n)
-  (HyExpression (apply zip (* [((get __builtins__ 'iter) src)] n))))
-
-(defun expand-collect-series (acc pairs)
-  `(do
-     ~@(mapcar (lambda (pair)
-                 (dbind (k v) pair
-                   `(.append (get ~acc ~k) ~v)))
-               (group pairs 2))))
-
-(defun replace-collect-series (flag ret-sym body)
-  (let ((acc ()))
-    (loop ((ls body)
-            (acc acc))
-          (if (typep ls HyCons)
-              nil
-              (for (i (range (length ls)))
-                (setf el (get ls i))
-                (when (and (consp el) (= (car el) 'iter))
-                  (continue))
-                (if (and (typep el HyExpression) (= (car el) 'collect-series))
-                    (setf (get ls i) (cond/cl
-                                       ((matchp el '(collect-series _)) (expand-collect-series ret-sym (get el 1)))
-                                       ((matchp el '(collect-series _ into _)) (expand-collect-series (get el 3) (get el 1))))
                           (get flag 0) True)
                     (if (consp el)
                         (recur el acc))))))
@@ -355,7 +325,7 @@
          (res nil)
          (flag [False])
          (init-var nil))
-    (for (el [replace-collect replace-collect-series replace-append
+    (for (el [replace-collect replace-append
               replace-minimize replace-sum replace-maximize 
               replace-count])
       (setf res (el flag g!ret (get g!parsed :body)))
@@ -363,7 +333,6 @@
         (setf body-and-accs res)           
         (cond/cl
           ((in el [replace-collect replace-append]) (setf init-var []))
-          ((= el replace-collect-series) (setf init-var `(defaultdict list)))
           ((= el replace-minimize) (setf init-var 10000000000000))
           ((= el replace-maximize) (setf init-var -10000000000000))
           ((in el [replace-sum replace-count]) (setf init-var 0)))
@@ -380,14 +349,16 @@
            (do
              (setv ~@(flatten-1 (get g!parsed :with)))             
              (while True
+               ~(when (get g!parsed :drop)
+                  `(when (and ~@(get g!parsed :drop))
+                     (setv ~@(flatten-1 (get g!parsed :for)))
+                     (continue)))               
                ~@(replace-return (get g!parsed :body)) 
                (setv ~@(flatten-1 (get g!parsed :for)))
                (when (or ~@(get g!parsed :break))
                  (break))))
            (except (e StopIteration)
-             None))
-         (when (is (type ~g!ret) defaultdict)
-           (setf ~g!ret (pd.DataFrame ~g!ret)))
+             None))         
          ~@(replace-return (get g!parsed :finally)) 
          ~g!ret)
        (except (r hyiter.core.Return)
