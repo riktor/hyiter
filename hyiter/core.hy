@@ -303,15 +303,14 @@
     body))
 
 
-
 (defclass Return (Exception)
   (defn __init__ (self val)
-    (setf (. self val) val)))
+    (setf (. self val) val))
 
-(defclass TaggedReturn (Exception)
-  (defn __init__ (self  tag val)
-    (setf (. self tag) tag)
-    (setf (. self val) val)))
+  (defclass TaggedReturn (Exception)
+    (defn __init__ (self  tag val)
+      (setf (. self tag) tag)
+      (setf (. self val) val))))
 
 (defmacro return-iter (val)
   `(raise (Return ~val)))
