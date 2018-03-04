@@ -337,34 +337,36 @@
           ((= el replace-maximize) (setf init-var -10000000000000))
           ((in el [replace-sum replace-count]) (setf init-var 0)))
         (break)))
-    `(try
-       (do
-         (setv ~g!tag ~(if (keyword? (car clauses))
-                           (car clauses)
-                           None))
-         (setv ~g!ret ~init-var)
-         ~@(replace-return (get g!parsed :initially))
-         (setv ~@(flatten-1 (mapcar (lambda (x) `(~x [])) (cdr body-and-accs))))
-         (try
-           (do
-             (setv ~@(flatten-1 (get g!parsed :with)))             
-             (while True
-               ~(when (get g!parsed :drop)
-                  `(when (and ~@(get g!parsed :drop))
-                     (setv ~@(flatten-1 (get g!parsed :for)))
-                     (continue)))               
-               ~@(replace-return (get g!parsed :body)) 
-               (setv ~@(flatten-1 (get g!parsed :for)))
-               (when (or ~@(get g!parsed :break))
-                 (break))))
-           (except (e StopIteration)
-             None))         
-         ~@(replace-return (get g!parsed :finally)) 
-         ~g!ret)
-       (except (r hyiter.core.Return)
-         (. r val))
-       (except (tr hyiter.core.TaggedReturn)
-         (if (= (. tr tag) ~g!tag)
-             (. tr val)
-             (raise tr))))))
+    `(do
+       (import hyiter.core)
+       (try       
+         (do         
+           (setv ~g!tag ~(if (keyword? (car clauses))
+                             (car clauses)
+                             None))
+           (setv ~g!ret ~init-var)
+           ~@(replace-return (get g!parsed :initially))
+           (setv ~@(flatten-1 (mapcar (lambda (x) `(~x [])) (cdr body-and-accs))))
+           (try
+             (do
+               (setv ~@(flatten-1 (get g!parsed :with)))             
+               (while True
+                 ~(when (get g!parsed :drop)
+                    `(when (and ~@(get g!parsed :drop))
+                       (setv ~@(flatten-1 (get g!parsed :for)))
+                       (continue)))               
+                 ~@(replace-return (get g!parsed :body)) 
+                 (setv ~@(flatten-1 (get g!parsed :for)))
+                 (when (or ~@(get g!parsed :break))
+                   (break))))
+             (except (e StopIteration)
+               None))         
+           ~@(replace-return (get g!parsed :finally)) 
+           ~g!ret)
+         (except (r hyiter.core.Return)
+           (. r val))
+         (except (tr hyiter.core.TaggedReturn)
+           (if (= (. tr tag) ~g!tag)
+               (. tr val)
+               (raise tr)))))))
 
