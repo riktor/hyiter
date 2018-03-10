@@ -86,8 +86,8 @@
               (setf (get parsed :for)
                     (append destr (get parsed :for)))))))
 
-    ;; for from clause
-    ((matchp clause '(for _ from _))
+    ;; for from clause    
+    ((matchp clause '(for _ from _))      
       (push `(~(get clause 1) ~(get clause 3)) (get parsed :with))
       (push `(~(get clause 1) (+ ~(get clause 1) 1)) (get parsed :for)))
     ((matchp clause '(for _ from _ below _))
@@ -302,15 +302,33 @@
           (cons body acc))
     body))
 
+(defun replace-continue (parsed-for body)
+  (let ((acc ()))
+    (loop ((ls  body)
+            (acc acc))
+          (if (typep ls HyCons)
+              nil
+              (for (i (range (length ls)))
+                (setf el (get ls i))
+                (when (and (consp el) (= (car el) 'iter)) 
+                  (continue))
+                (if (and (typep el HyExpression) (= (car el) 'continue))
+                    (setf (get ls i) `(do
+                                        (setv ~@(flatten-1 parsed-for))
+                                        (continue)))                                
+                    (if (consp el)
+                        (recur el acc)))))
+          (cons body acc))
+    body))
 
 (defclass Return (Exception)
   (defn __init__ (self val)
     (setf (. self val) val)))
 
 (defclass TaggedReturn (Exception)
-    (defn __init__ (self  tag val)
-      (setf (. self tag) tag)
-      (setf (. self val) val)))
+  (defn __init__ (self  tag val)
+    (setf (. self tag) tag)
+    (setf (. self val) val)))
 
 (defmacro return-iter (val)
   `(raise (Return ~val)))
@@ -354,7 +372,8 @@
                     `(when (and ~@(get g!parsed :drop))
                        (setv ~@(flatten-1 (get g!parsed :for)))
                        (continue)))               
-                 ~@(replace-return (get g!parsed :body)) 
+                 ~@(replace-continue (get g!parsed :for)
+                                     (replace-return (get g!parsed :body))) 
                  (setv ~@(flatten-1 (get g!parsed :for)))
                  (when (or ~@(get g!parsed :break))
                    (break))))
@@ -368,4 +387,3 @@
            (if (= (. tr tag) ~g!tag)
                (. tr val)
                (raise tr)))))))
-
