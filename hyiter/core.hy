@@ -147,7 +147,7 @@
     (nreverse (get parsed-clauses :body))
     parsed-clauses))
 
-(defun replace-collect (flag ret-sym body)
+(defun replace-collect (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -158,18 +158,19 @@
                 (when (and (consp el) (= (car el) 'iter))
                   (continue))
                 (if (and (typep el HyExpression) (= (car el) 'collect))
-                    (setf (get ls i) `(.append ~(cond/cl
-                                                  ((matchp el '(collect _)) ret-sym)
-                                                  ((matchp el '(collect _ into _))
-                                                    (.extend acc [(get el 3)])
-                                                    (get el 3)))
+                    (setf (get ls i) `( ~(cond/cl
+                                          ((matchp el '(collect _)) update-fn-sym)
+                                          ((matchp el '(collect _ into _))
+                                            (let ((sym (gensym 'update)))
+                                              (.append acc [(get el 3) sym])
+                                              sym)))
                                                ~(get el 1))
                           (get flag 0) True)
                     (if (consp el)
                         (recur el acc))))))
     (cons body acc)))
 
-(defun replace-append (flag ret-sym body)
+(defun replace-append (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -180,18 +181,20 @@
                 (when (and (consp el) (= (car el) 'iter)) 
                   (continue))
                 (if (and (typep el HyExpression) (= (car el) 'append))
-                    (setf (get ls i) `(.extend ~(cond/cl
-                                                  ((matchp el '(append _)) ret-sym)
-                                                  ((matchp el '(append _ into _))
-                                                    (.extend acc [(get el 3)])
-                                                    (get el 3)))
-                                               ~(get el 1))
+                    (setf (get ls i) `(~(cond/cl
+                                          ((matchp el '(append _)) update-fn-sym)
+                                          ((matchp el '(append _ into _))
+                                            (let ((sym (gensym 'update)))
+                                              (.append acc [(get el 3) sym])
+                                              sym)))
+                                       ~(get el 1)) 
                           (get flag 0) True)
+                    
                     (if (consp el)
                         (recur el acc))))))
     (cons body acc)))
 
-(defun replace-maximize (flag ret-sym body)
+(defun replace-maximize (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -205,7 +208,7 @@
                     (let ((sym (cond/cl
                                  ((matchp el '(maximize _)) ret-sym)
                                  ((matchp el '(maximize _ into _))
-                                   (.extend acc [(get el 3)])
+                                   (.append acc [(get el 3) nil])
                                    (get el 3)))))
                       (setf (get flag 0) True)
                       (setf (get ls i) `(setv ~sym (max ~sym ~(get el 1)))))
@@ -213,7 +216,7 @@
                         (recur el acc))))))
     (cons body acc)))
 
-(defun replace-minimize (flag ret-sym body)
+(defun replace-minimize (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -227,7 +230,7 @@
                     (let ((sym (cond/cl
                                  ((matchp el '(minimize _)) ret-sym)
                                  ((matchp el '(minimize _ into _))
-                                   (.extend acc [(get el 3)])
+                                   (.append acc [(get el 3) nil])
                                    (get el 3)))))
                       (setf (get flag 0) True)
                       (setf (get ls i) `(setv ~sym (min ~sym ~(get el 1)))))
@@ -235,7 +238,7 @@
                         (recur el acc))))))
     (cons body acc)))
 
-(defun replace-sum (flag ret-sym body)
+(defun replace-sum (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -248,9 +251,8 @@
                 (if (and (typep el HyExpression) (= (car el) 'sum))
                     (let ((sym (cond/cl
                                  ((matchp el '(sum _)) ret-sym)
-                                 ((matchp el '(sum _ into _))
-                                   (print 'here)
-                                   (.extend acc [(get el 3)])
+                                 ((matchp el '(sum _ into _))                                  
+                                   (.append acc [(get el 3) nil])
                                    (get el 3)))))
                       (setf (get flag 0) True)
                       (setf (get ls i) `(setv ~sym (+ ~sym ~(get el 1)))))
@@ -258,7 +260,7 @@
                         (recur el acc))))))
     (cons body acc)))
 
-(defun replace-count (flag ret-sym body)
+(defun replace-count (flag ret-sym update-fn-sym body)
   (let ((acc ()))
     (loop ((ls body)
             (acc acc))
@@ -272,7 +274,7 @@
                     (let ((sym (cond/cl
                                  ((matchp el '(count _)) ret-sym)
                                  ((matchp el '(count _ into _))
-                                   (.extend acc [(get el 3)])
+                                   (.append acc [(get el 3) nil])
                                    (get el 3)))))
                       (setf (get flag 0) True)
                       (setf (get ls i) `(when ~(get el 1)
@@ -344,24 +346,33 @@
     ((= replacer replace-maximize) -10000000000000)
     ((in replacer [replace-sum replace-count]) 0)))
 
+(defun get-update-fn (replacer acc-sym)
+  (cond/cl
+    ((= replacer replace-collect) `(. ~acc-sym append))
+    ((= replacer replace-append) `(. ~acc-sym extend))))
+
 (defmacro/g! iter (&rest clauses)  
   (let ((g!parsed (parse-clauses clauses g!ret)))
     (let ((body (get g!parsed :body))
            (accs nil)
            (res nil)
-           (init-var nil))
+           (init-var nil)
+           (update-fn nil))
       (for (el [replace-collect replace-append
                 replace-minimize replace-sum replace-maximize 
                 replace-count])              
         (setf flag [False]
-              res (el flag g!ret body))
+              res (el flag g!ret g!update body))
         (when (car flag)
           (setf body (car res)
-                accs (append accs (mapcar (lambda (sym)
-                                            `(~sym ~(get-init-val el)))
+                accs (append accs (mapcan (lambda (ls)
+                                            (setf init-list [(get ls 0) (get-init-val el)])                                           
+                                            (when (get ls 1)
+                                              (.extend init-list [(get ls 1) (get-update-fn el (get ls 0))]))
+                                            init-list)
                                           (cdr res))))
-          (when (emptyp (cdr res))
-            (setf init-var (get-init-val el)))))
+          (setf init-var (get-init-val el))
+          (setf update-fn (get-update-fn el g!ret))))
       `(do
          (import hyiter.core)
          (try       
@@ -369,9 +380,10 @@
              (setv ~g!tag ~(if (keyword? (car clauses))
                                (car clauses)
                                None))
-             (setv ~g!ret ~init-var)
-             ~@(replace-return (get g!parsed :initially))
-             (setv ~@(flatten-1 accs))
+             (setv ~g!ret ~init-var
+                   ~g!update ~update-fn)             
+             ~@(replace-return (get g!parsed :initially))             
+             (setv ~@accs)
              (try
                (do
                  (setv ~@(flatten-1 (get g!parsed :with)))             
