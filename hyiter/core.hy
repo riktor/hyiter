@@ -72,7 +72,7 @@
     ((matchp clause '(for _ in _))
       (let ((__it__  (gensym "it"))
              (__cur__ (gensym "cur")))
-        (push `(~__it__ ((get __builtins__ 'iter) ~(get clause 3))) (get parsed :with))
+        (push `(~__it__ (iter ~(get clause 3))) (get parsed :with))
         (push `(~__cur__ (next ~__it__) ) (get parsed :with))
         (if (not (consp (get clause 1)))
             (progn                 
@@ -159,111 +159,89 @@
            (when ~condition           
              (setf (get ~g!tree ~g!ind) ~replace
                    (get ~g!replaced 0) True))
-           (when (and (consp !el!) (not (= (get !el! 0) 'iter)))
+           (when (and (consp !el!) (not (= (get !el! 0) 'itr)))
              (recur !el!)))))
-     [~g!orig-tree !acc! ~g!replaced]))
+     [~g!orig-tree !acc! (get ~g!replaced 0)]))
 
-(defun replace-collect (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'collect))
-                      `(~(cond/cl
-                           ((matchp !el! '(collect _)) update-fn-sym)
-                           ((matchp !el! '(collect _ into _))
-                             (let ((sym (gensym 'update)))
-                               (.append !acc! [(get !el! 3) sym])
-                               sym)))
-                        ~(get !el! 1)))    
-    (setf (get flag 0) (get replaced 0))    
-    (cons tree acc)))
+(defun replace-collect (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'collect))
+                    `(~(cond/cl
+                         ((matchp !el! '(collect _)) update-fn-sym)
+                         ((matchp !el! '(collect _ into _))
+                           (let ((sym (gensym 'update)))
+                             (.append !acc! [(get !el! 3) sym])
+                             sym)))
+                      ~(get !el! 1))))
 
-(defun replace-append (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'append))
-                      `(~(cond/cl
-                           ((matchp !el! '(append _)) update-fn-sym)
-                           ((matchp !el! '(append _ into _))
-                             (let ((sym (gensym 'update)))
-                               (.append !acc! [(get !el! 3) sym])
-                               sym)))
-                        ~(get !el! 1)))    
-    (setf (get flag 0) (get replaced 0))
-    (cons tree acc)))
+(defun replace-append (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'append))
+                    `(~(cond/cl
+                         ((matchp !el! '(append _)) update-fn-sym)
+                         ((matchp !el! '(append _ into _))
+                           (let ((sym (gensym 'update)))
+                             (.append !acc! [(get !el! 3) sym])
+                             sym)))
+                      ~(get !el! 1))))
 
-(defun replace-maximize (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'maximize))
-                      (let ((sym (cond/cl
-                                   ((matchp !el! '(maximize _)) ret-sym)
-                                   ((matchp !el! '(maximize _ into _))
-                                     (.append acc [(get !el! 3) nil])
-                                     (get !el! 3)))))
-                        `(setv ~sym (max ~sym ~(get !el! 1)))))    
-    (setf (get flag 0) (get replaced 0))
-    (cons tree acc)))
+(defun replace-maximize (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'maximize))
+                    (let ((sym (cond/cl
+                                 ((matchp !el! '(maximize _)) ret-sym)
+                                 ((matchp !el! '(maximize _ into _))
+                                   (.append acc [(get !el! 3) nil])
+                                   (get !el! 3)))))
+                      `(setv ~sym (max ~sym ~(get !el! 1))))))
 
-(defun replace-minimize (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'minimize))
-                      (let ((sym (cond/cl
-                                   ((matchp !el! '(minimize _)) ret-sym)
-                                   ((matchp !el! '(minimize _ into _))
-                                     (.append acc [(get !el! 3) nil])
-                                     (get !el! 3)))))
-                        `(setv ~sym (min ~sym ~(get !el! 1)))))    
-    (setf (get flag 0) (get replaced 0))
-    (cons tree acc)))
+(defun replace-minimize (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'minimize))
+                    (let ((sym (cond/cl
+                                 ((matchp !el! '(minimize _)) ret-sym)
+                                 ((matchp !el! '(minimize _ into _))
+                                   (.append acc [(get !el! 3) nil])
+                                   (get !el! 3)))))
+                      `(setv ~sym (min ~sym ~(get !el! 1))))))
 
-(defun replace-sum (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'sum))
-                      (let ((sym (cond/cl
-                                   ((matchp !el! '(sum _)) ret-sym)
-                                   ((matchp !el! '(sum _ into _))
-                                     (.append acc [(get !el! 3) nil])
-                                     (get !el! 3)))))
-                        `(setv ~sym (+ ~sym ~(get !el! 1)))))    
-    (setf (get flag 0) (get replaced 0))
-    (cons tree acc)))
+(defun replace-sum (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'sum))
+                    (let ((sym (cond/cl
+                                 ((matchp !el! '(sum _)) ret-sym)
+                                 ((matchp !el! '(sum _ into _))
+                                   (.append acc [(get !el! 3) nil])
+                                   (get !el! 3)))))
+                      `(setv ~sym (+ ~sym ~(get !el! 1))))))
 
-(defun replace-count (flag ret-sym update-fn-sym body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'count))
-                      (let ((sym (cond/cl
-                                   ((matchp !el! '(count _)) ret-sym)
-                                   ((matchp !el! '(count _ into _))
-                                     (.append acc [(get !el! 3) nil])
-                                     (get !el! 3)))))
-                        `(when ~(get !el! 1) 
-                           (setv ~sym (+ ~sym 1)))))    
-    (setf (get flag 0) (get replaced 0))
-    (cons tree acc)))
+(defun replace-count (ret-sym update-fn-sym body)
+  (nreplace-clauses body
+                    (and (typep !el! HyExpression) (= (car !el!) 'count))
+                    (let ((sym (cond/cl
+                                 ((matchp !el! '(count _)) ret-sym)
+                                 ((matchp !el! '(count _ into _))
+                                   (.append acc [(get !el! 3) nil])
+                                   (get !el! 3)))))
+                      `(when ~(get !el! 1) 
+                         (setv ~sym (+ ~sym 1))))))
 
 (defun replace-return (body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression)
-                           (or (= (car !el!) 'return) (= (car !el!) 'return-from)))          
-                      (cond/cl
-                      ((matchp !el! '(return _))
-                        `(raise (hyiter.core.Return ~(get !el! 1))))
-                      ((matchp !el! '(return-from _ _))
-                        `(raise (hyiter.core.TaggedReturn ~(get !el! 1) ~(get !el! 2))))))    
-    tree))
+  (first (nreplace-clauses body
+                           (and (typep !el! HyExpression)
+                                (or (= (car !el!) 'return) (= (car !el!) 'return-from)))          
+                           (cond/cl
+                             ((matchp !el! '(return _))
+                               `(raise (hyiter.core.Return ~(get !el! 1))))
+                             ((matchp !el! '(return-from _ _))
+                               `(raise (hyiter.core.TaggedReturn ~(get !el! 1) ~(get !el! 2))))))) )
 
 (defun replace-continue (parsed-for body)
-  (dbind (tree acc replaced)
-    (nreplace-clauses body
-                      (and (typep !el! HyExpression) (= (car !el!) 'continue))
-                      `(do
-                         (setv ~@(flatten-1 parsed-for))
-                         (continue)))    
-    tree))
+  (first (nreplace-clauses body
+                           (and (typep !el! HyExpression) (= (car !el!) 'continue))
+                           `(do
+                              (setv ~@(flatten-1 parsed-for))
+                              (continue)))))
 
 
 (defclass Return (Exception)
@@ -274,12 +252,6 @@
   (defn __init__ (self  tag val)
     (setf (. self tag) tag)
     (setf (. self val) val)))
-
-(defmacro return-iter (val)
-  `(raise (Return ~val)))
-
-(defmacro return-from (tag val)
-  `(raise (TaggedReturn ~tag ~val)))
 
 (defun get-init-val (replacer)
   (cond/cl
@@ -293,7 +265,7 @@
     ((= replacer replace-collect) `(. ~acc-sym append))
     ((= replacer replace-append) `(. ~acc-sym extend))))
 
-(defmacro/g! iter (&rest clauses)  
+(defmacro/g! itr (&rest clauses)  
   (let ((g!parsed (parse-clauses clauses g!ret)))
     (let ((body (get g!parsed :body))
            (accs nil)
@@ -302,19 +274,20 @@
            (update-fn nil))
       (for (el [replace-collect replace-append
                 replace-minimize replace-sum replace-maximize 
-                replace-count])
-        (setf flag [False]
-              res (el flag g!ret g!update body))
-        (when (car flag)
-          (setf body (car res)
-                accs (append accs (mapcan (lambda (ls)
+                replace-count])   
+        (setf res (el g!ret g!update body)
+              body (get res 0)
+              acc-ls (get res 1)
+              flag (get res 2))
+        (when flag
+          (setf accs (append accs (mapcan (lambda (ls)
                                             (setf init-list [(get ls 0) (get-init-val el)])
                                             (when (get ls 1)
                                               (.extend init-list [(get ls 1) (get-update-fn el (get ls 0))]))
                                             init-list)
-                                          (cdr res))))
-          (setf init-var (get-init-val el))
-          (setf update-fn (get-update-fn el g!ret))))
+                                          acc-ls))
+                init-var (get-init-val el)
+                update-fn (get-update-fn el g!ret))))
       `(do
          (import hyiter.core)
          (try       
