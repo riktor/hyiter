@@ -191,7 +191,7 @@
                     (let ((sym (cond/cl
                                  ((matchp !el! '(maximize _)) ret-sym)
                                  ((matchp !el! '(maximize _ into _))
-                                   (.append acc [(get !el! 3) nil])
+                                   (.append !acc! [(get !el! 3) nil])
                                    (get !el! 3)))))
                       `(setv ~sym (max ~sym ~(get !el! 1))))))
 
@@ -201,7 +201,7 @@
                     (let ((sym (cond/cl
                                  ((matchp !el! '(minimize _)) ret-sym)
                                  ((matchp !el! '(minimize _ into _))
-                                   (.append acc [(get !el! 3) nil])
+                                   (.append !acc! [(get !el! 3) nil])
                                    (get !el! 3)))))
                       `(setv ~sym (min ~sym ~(get !el! 1))))))
 
@@ -211,7 +211,7 @@
                     (let ((sym (cond/cl
                                  ((matchp !el! '(sum _)) ret-sym)
                                  ((matchp !el! '(sum _ into _))
-                                   (.append acc [(get !el! 3) nil])
+                                   (.append !acc! [(get !el! 3) nil])
                                    (get !el! 3)))))
                       `(setv ~sym (+ ~sym ~(get !el! 1))))))
 
@@ -221,7 +221,7 @@
                     (let ((sym (cond/cl
                                  ((matchp !el! '(count _)) ret-sym)
                                  ((matchp !el! '(count _ into _))
-                                   (.append acc [(get !el! 3) nil])
+                                   (.append !acc! [(get !el! 3) nil])
                                    (get !el! 3)))))
                       `(when ~(get !el! 1) 
                          (setv ~sym (+ ~sym 1))))))
