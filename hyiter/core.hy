@@ -1,16 +1,16 @@
 (import
-  (hycl.core (*)))
+  [hycl.core [*]])
 
 (require
-  (hycl.core (*))
-  (hy.contrib.loop (loop)))
+  [hycl.core [*]]
+  [hy.contrib.loop [loop]])
 
 
 (defun matchp (clause ptn)
   (if (not (= (length clause) (length ptn)))
       False
       (let ((flag True))
-        (for (tp (zip clause ptn))
+        (for [tp (zip clause ptn)]
           (when (and (not (= (get tp 1) '_)) (not (= (get tp 0) (get tp 1)))) 
             (setf flag False)
             (break)))
@@ -18,14 +18,16 @@
 
 (defun flatten-destruc (ls)
   (let ((acc ()))
-    (for (el ls)
+    (for [el ls]
       (if (consp (car el))
           (.extend acc (flatten-destruc el))
           (.append acc el)))
     acc))
 
-(defun parse-clause (clause parsed ret-sym)
+(defun parse-clause (clause parsed ret-sym)   
   (cond/cl
+    ((keyword? clause)
+     (setf (get parsed :loop-tag) clause))
     ;; initially clause
     ((= (car clause) 'initially)
       (setf (get parsed :initially) (cdr clause)))
@@ -138,8 +140,9 @@
                          :body nil
                          :finally nil
                          :break nil
-                         :drop nil}))
-    (for (el clauses)
+                         :drop nil
+                         :loop-tag nil}))
+    (for [el clauses]
       (parse-clause el parsed-clauses ret-sym))
     (nreverse (get parsed-clauses :for))
     (nreverse (get parsed-clauses :with))
@@ -154,7 +157,7 @@
      (loop     
        ((~g!tree ~g!orig-tree))       
        (progn
-         (for (~g!ind (range (len ~g!tree)))         
+         (for [~g!ind (range (len ~g!tree))]         
            (setf !el! (get ~g!tree ~g!ind))         
            (when ~condition           
              (setf (get ~g!tree ~g!ind) ~replace
@@ -244,12 +247,12 @@
                               (continue)))))
 
 
-(defclass Return (Exception)
-  (defn __init__ (self val)
+(defclass Return [Exception]
+  (defn __init__ [self val]
     (setf (. self val) val)))
 
-(defclass TaggedReturn (Exception)
-  (defn __init__ (self  tag val)
+(defclass TaggedReturn [Exception]
+  (defn __init__ [self  tag val]
     (setf (. self tag) tag)
     (setf (. self val) val)))
 
@@ -271,10 +274,10 @@
            (accs nil)
            (res nil)
            (init-var nil)
-           (update-fn nil))
-      (for (el [replace-collect replace-append
+          (update-fn nil))
+      (for [el [replace-collect replace-append
                 replace-minimize replace-sum replace-maximize 
-                replace-count])   
+                replace-count]]   
         (setf res (el g!ret g!update body)
               body (get res 0)
               acc-ls (get res 1)
@@ -292,9 +295,7 @@
          (import hyiter.core)
          (try       
            (do         
-             (setv ~g!tag ~(if (keyword? (car clauses))
-                               (car clauses)
-                               None))
+             (setv ~g!tag ~(get g!parsed :loop-tag))
              (setv ~g!ret ~init-var
                    ~g!update ~update-fn)             
              ~@(replace-return (get g!parsed :initially))             
@@ -312,13 +313,13 @@
                    (setv ~@(flatten-1 (get g!parsed :for)))
                    (when (or ~@(get g!parsed :break))
                      (break))))
-               (except (e StopIteration)
+               (except [e StopIteration]
                  None))         
              ~@(replace-return (get g!parsed :finally)) 
              ~g!ret)
-           (except (r hyiter.core.Return)
+           (except [r hyiter.core.Return]
              (. r val))
-           (except (tr hyiter.core.TaggedReturn)
+           (except [tr hyiter.core.TaggedReturn]
              (if (= (. tr tag) ~g!tag)
                  (. tr val)
                  (raise tr))))))))
